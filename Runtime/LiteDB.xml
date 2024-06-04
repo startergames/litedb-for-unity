@@ -1931,6 +1931,11 @@
             When property is an array of items, gets underlying type (otherwise is same type of PropertyType)
             </summary>
         </member>
+        <member name="P:LiteDB.MemberMapper.IsIgnore">
+            <summary>
+            Is this property ignore
+            </summary>
+        </member>
         <member name="T:LiteDB.Reflection">
             <summary>
             Helper class to get entity properties and map as BsonValue
@@ -2346,6 +2351,11 @@
             "upgrade": Check if data file is an old version and convert before open (default: false)
             </summary>
         </member>
+        <member name="P:LiteDB.ConnectionString.AutoRebuild">
+            <summary>
+            "auto-rebuild": If last close database exception result a invalid data state, rebuild datafile on next open (default: false)
+            </summary>
+        </member>
         <member name="P:LiteDB.ConnectionString.Collation">
             <summary>
             "collation": Set default collaction when database creation (default: "[CurrentCulture]/IgnoreCase")
@@ -2657,7 +2667,7 @@
             Initialize with a single value
             </summary>
         </member>
-        <member name="M:LiteDB.BsonDataReader.#ctor(System.Collections.Generic.IEnumerable{LiteDB.BsonValue},System.String)">
+        <member name="M:LiteDB.BsonDataReader.#ctor(System.Collections.Generic.IEnumerable{LiteDB.BsonValue},System.String,LiteDB.Engine.EngineState)">
             <summary>
             Initialize with an IEnumerable data source
             </summary>
@@ -3709,17 +3719,17 @@
             Static class for serialize/deserialize BsonDocuments into json extended format
             </summary>
         </member>
-        <member name="M:LiteDB.JsonSerializer.Serialize(LiteDB.BsonValue)">
+        <member name="M:LiteDB.JsonSerializer.Serialize(LiteDB.BsonValue,System.Boolean)">
             <summary>
             Json serialize a BsonValue into a String
             </summary>
         </member>
-        <member name="M:LiteDB.JsonSerializer.Serialize(LiteDB.BsonValue,System.IO.TextWriter)">
+        <member name="M:LiteDB.JsonSerializer.Serialize(LiteDB.BsonValue,System.IO.TextWriter,System.Boolean)">
             <summary>
             Json serialize a BsonValue into a TextWriter
             </summary>
         </member>
-        <member name="M:LiteDB.JsonSerializer.Serialize(LiteDB.BsonValue,System.Text.StringBuilder)">
+        <member name="M:LiteDB.JsonSerializer.Serialize(LiteDB.BsonValue,System.Text.StringBuilder,System.Boolean)">
             <summary>
             Json serialize a BsonValue into a StringBuilder
             </summary>
@@ -3908,6 +3918,13 @@
             Get a new instance for read data/log pages. This instance are not thread-safe - must request 1 per thread (used in Transaction)
             </summary>
         </member>
+        <member name="P:LiteDB.Engine.DiskService.MAX_ITEMS_COUNT">
+            <summary>
+            This method calculates the maximum number of items (documents or IndexNodes) that this database can have.
+            The result is used to prevent infinite loops in case of problems with pointers
+            Each page support max of 255 items. Use 10 pages offset (avoid empty disk)
+            </summary>
+        </member>
         <member name="M:LiteDB.Engine.DiskService.DiscardDirtyPages(System.Collections.Generic.IEnumerable{LiteDB.Engine.PageBuffer})">
             <summary>
             When a page are requested as Writable but not saved in disk, must be discard before release
@@ -3934,9 +3951,9 @@
             and incrementing file size (Log file)
             </summary>
         </member>
-        <member name="M:LiteDB.Engine.DiskService.ChangePassword(System.String,LiteDB.Engine.EngineSettings)">
+        <member name="M:LiteDB.Engine.DiskService.MarkAsInvalidState">
             <summary>
-            Clear data file, close any data stream pool, change password and re-create data factory
+            Mark a file with a single signal to next open do auto-rebuild. Used only when closing database (after close files)
             </summary>
         </member>
         <member name="M:LiteDB.Engine.DiskService.ReadFull(LiteDB.Engine.FileOrigin)">
@@ -3974,11 +3991,6 @@
             <summary>
             Add page into writer queue and will be saved in disk by another thread. If page.Position = MaxValue, store at end of file (will get final Position)
             After this method, this page will be available into reader as a clean page
-            </summary>
-        </member>
-        <member name="M:LiteDB.Engine.DiskWriterQueue.Run">
-            <summary>
-            If queue contains pages and are not running, starts run queue again now
             </summary>
         </member>
         <member name="M:LiteDB.Engine.DiskWriterQueue.Wait">
@@ -4603,6 +4615,16 @@
             Indicate that engine will open files in readonly mode (and will not support any database change)
             </summary>
         </member>
+        <member name="P:LiteDB.Engine.EngineSettings.AutoRebuild">
+            <summary>
+            After a Close with exception do a database rebuild on next open
+            </summary>
+        </member>
+        <member name="P:LiteDB.Engine.EngineSettings.Upgrade">
+            <summary>
+            If detect it's a older version (v4) do upgrade in datafile to new v5. A backup file will be keeped in same directory
+            </summary>
+        </member>
         <member name="M:LiteDB.Engine.EngineSettings.CreateDataFactory">
             <summary>
             Create new IStreamFactory for datafile
@@ -4688,7 +4710,14 @@
         </member>
         <member name="M:LiteDB.Engine.LiteEngine.Rebuild(LiteDB.Engine.RebuildOptions)">
             <summary>
-            Recreate database using empty LOG file to re-write all documents with all indexes
+            Implement a full rebuild database. Engine will be closed and re-created in another instance.
+            A backup copy will be created with -backup extention. All data will be readed and re created in another database
+            After run, will re-open database
+            </summary>
+        </member>
+        <member name="M:LiteDB.Engine.LiteEngine.Rebuild">
+            <summary>
+            Implement a full rebuild database. A backup copy will be created with -backup extention. All data will be readed and re created in another database
             </summary>
         </member>
         <member name="M:LiteDB.Engine.LiteEngine.RebuildContent(LiteDB.Engine.IFileReader)">
@@ -4696,9 +4725,9 @@
             Fill current database with data inside file reader - run inside a transacion
             </summary>
         </member>
-        <member name="F:LiteDB.Engine.LiteEngine._sequences">
+        <member name="M:LiteDB.Engine.LiteEngine.Recovery(LiteDB.Collation)">
             <summary>
-            Sequence cache for collections last ID (for int/long numbers only)
+            Recovery datafile using a rebuild process. Run only on "Open" database
             </summary>
         </member>
         <member name="M:LiteDB.Engine.LiteEngine.GetSequence(LiteDB.Engine.Snapshot,LiteDB.BsonAutoId)">
@@ -4770,6 +4799,11 @@
             Implement internal update document
             </summary>
         </member>
+        <member name="M:LiteDB.Engine.LiteEngine.TryUpgrade">
+            <summary>
+            If Upgrade=true, run this before open Disk service
+            </summary>
+        </member>
         <member name="M:LiteDB.Engine.LiteEngine.Upgrade(System.String,System.String,LiteDB.Collation)">
             <summary>
             Upgrade old version of LiteDB into new LiteDB file structure. Returns true if database was completed converted
@@ -4781,6 +4815,16 @@
             Implement upsert command to documents in a collection. Calls update on all documents,
             then any documents not updated are then attempted to insert.
             This will have the side effect of throwing if duplicate items are attempted to be inserted.
+            </summary>
+        </member>
+        <member name="F:LiteDB.Engine.LiteEngine._systemCollections">
+            <summary>
+            All system read-only collections for get metadata database information
+            </summary>
+        </member>
+        <member name="F:LiteDB.Engine.LiteEngine._sequences">
+            <summary>
+            Sequence cache for collections last ID (for int/long numbers only)
             </summary>
         </member>
         <member name="M:LiteDB.Engine.LiteEngine.#ctor">
@@ -4798,18 +4842,29 @@
             Initialize LiteEngine using initial engine settings
             </summary>
         </member>
-        <member name="M:LiteDB.Engine.LiteEngine.Checkpoint">
+        <member name="M:LiteDB.Engine.LiteEngine.Close">
             <summary>
-            Run checkpoint command to copy log file into data file
-            </summary>
-        </member>
-        <member name="M:LiteDB.Engine.LiteEngine.Dispose(System.Boolean)">
-            <summary>
-            Shutdown process:
+            Normal close process:
             - Stop any new transaction
             - Stop operation loops over database (throw in SafePoint)
             - Wait for writer queue
             - Close disks
+            - Clean variables
+            </summary>
+        </member>
+        <member name="M:LiteDB.Engine.LiteEngine.Close(System.Exception)">
+            <summary>
+            Exception close database:
+            - Stop diskQueue
+            - Stop any disk read/write (dispose)
+            - Dispose sort disk
+            - Dispose locker
+            - Checks Exception type for INVALID_DATAFILE_STATE to auto rebuild on open
+            </summary>
+        </member>
+        <member name="M:LiteDB.Engine.LiteEngine.Checkpoint">
+            <summary>
+            Run checkpoint command to copy log file into data file
             </summary>
         </member>
         <member name="M:LiteDB.Engine.LiteEngine.InitializeSystemCollections">
@@ -4817,9 +4872,18 @@
             Register all internal system collections avaiable by default
             </summary>
         </member>
+        <member name="T:LiteDB.Engine.FileReaderError">
+            <summary>
+            </summary>
+        </member>
         <member name="T:LiteDB.Engine.FileReaderV7">
             <summary>
             Internal class to read old LiteDB v4 database version (datafile v7 structure)
+            </summary>
+        </member>
+        <member name="M:LiteDB.Engine.FileReaderV7.IsVersion(System.Byte[])">
+            <summary>
+            Check header slots to test if data file is a LiteDB FILE_VERSION = v7
             </summary>
         </member>
         <member name="M:LiteDB.Engine.FileReaderV7.GetCollections">
@@ -4854,7 +4918,17 @@
         </member>
         <member name="T:LiteDB.Engine.FileReaderV8">
             <summary>
-            Internal class to read all datafile documents - use only Stream - no cache system (database are modified during this read - shrink)
+            Internal class to read all datafile documents - use only Stream - no cache system. Read log file (read commited transtraction)
+            </summary>
+        </member>
+        <member name="M:LiteDB.Engine.FileReaderV8.Open">
+            <summary>
+            Open data file and log file, read header and collection pages
+            </summary>
+        </member>
+        <member name="M:LiteDB.Engine.FileReaderV8.GetPragmas">
+            <summary>
+            Read all pragma values
             </summary>
         </member>
         <member name="M:LiteDB.Engine.FileReaderV8.GetCollections">
@@ -4873,14 +4947,45 @@
             There is no document order
             </summary>
         </member>
-        <member name="M:LiteDB.Engine.FileReaderV8.ReadPage``1(System.UInt32)">
+        <member name="M:LiteDB.Engine.FileReaderV8.LoadPragmas">
             <summary>
-            Read page from stream - do not use cache system
+            Load all pragmas from header page
             </summary>
         </member>
-        <member name="M:LiteDB.Engine.FileReaderV8.ReadBlocks(LiteDB.Engine.PageAddress)">
+        <member name="M:LiteDB.Engine.FileReaderV8.LoadDataPages">
             <summary>
-            Get all data blocks from first data block
+            Read all file (and log) to find all data pages (and store groupby colPageID)
+            </summary>
+        </member>
+        <member name="M:LiteDB.Engine.FileReaderV8.LoadCollections">
+            <summary>
+            Load all collections from header OR via all data-pages ColID
+            </summary>
+        </member>
+        <member name="M:LiteDB.Engine.FileReaderV8.LoadIndexes">
+            <summary>
+            Load all indexes for all collections
+            </summary>
+        </member>
+        <member name="M:LiteDB.Engine.FileReaderV8.IsVersion(System.Byte[])">
+            <summary>
+            Check header slots to test if data file is a LiteDB FILE_VERSION = v8
+            </summary>
+        </member>
+        <member name="M:LiteDB.Engine.FileReaderV8.LoadIndexMap">
+            <summary>
+            Load log file to build index map (wal map index)
+            </summary>
+        </member>
+        <member name="M:LiteDB.Engine.FileReaderV8.ReadPage(System.UInt32,LiteDB.Engine.FileReaderV8.PageInfo@)">
+            <summary>
+            Read page from data/log stream (checks in logIndexMap file/position). Capture any exception here, but don't call HandleError
+            </summary>
+        </member>
+        <member name="M:LiteDB.Engine.FileReaderV8.HandleError(System.Exception,LiteDB.Engine.FileReaderV8.PageInfo)">
+            <summary>
+            Handle any error avoiding throw exceptions during process. If exception must stop process (ioexceptions), throw exception
+            Add errors to log and continue reading data file
             </summary>
         </member>
         <member name="T:LiteDB.Engine.IFileReader">
@@ -4888,11 +4993,20 @@
             Interface to read current or old datafile structure - Used to shirnk/upgrade datafile from old LiteDB versions
             </summary>
         </member>
+        <member name="M:LiteDB.Engine.IFileReader.Open">
+            <summary>
+            Open and initialize file reader (run before any other command)
+            </summary>
+        </member>
+        <member name="M:LiteDB.Engine.IFileReader.GetPragmas">
+            <summary>
+            Get all database pragma variables
+            </summary>
+        </member>
         <member name="M:LiteDB.Engine.IFileReader.GetCollections">
             <summary>
             Get all collections name from database
             </summary>
-            <returns></returns>
         </member>
         <member name="M:LiteDB.Engine.IFileReader.GetIndexes(System.String)">
             <summary>
@@ -5223,7 +5337,7 @@
         <member name="T:LiteDB.Engine.HeaderPage">
             <summary>
             Header page represent first page on datafile. Engine contains a single instance of HeaderPage and all changes
-            must be syncornized (using lock).
+            must be synchronized (using lock).
             </summary>
         </member>
         <member name="F:LiteDB.Engine.HeaderPage.HEADER_INFO">
@@ -5717,12 +5831,12 @@
             Indicate this query is for update (lock mode = Write)
             </summary>
         </member>
-        <member name="M:LiteDB.Engine.QueryPlan.GetPipe(LiteDB.Engine.TransactionService,LiteDB.Engine.Snapshot,LiteDB.Engine.SortDisk,LiteDB.Engine.EnginePragmas)">
+        <member name="M:LiteDB.Engine.QueryPlan.GetPipe(LiteDB.Engine.TransactionService,LiteDB.Engine.Snapshot,LiteDB.Engine.SortDisk,LiteDB.Engine.EnginePragmas,System.UInt32)">
             <summary>
             Select corrent pipe
             </summary>
         </member>
-        <member name="M:LiteDB.Engine.QueryPlan.GetLookup(LiteDB.Engine.Snapshot,LiteDB.Engine.EnginePragmas)">
+        <member name="M:LiteDB.Engine.QueryPlan.GetLookup(LiteDB.Engine.Snapshot,LiteDB.Engine.EnginePragmas,System.UInt32)">
             <summary>
             Get corrent IDocumentLookup
             </summary>
@@ -5745,7 +5859,7 @@
         </member>
         <member name="M:LiteDB.Engine.CollectionService.Get(System.String,System.Boolean,LiteDB.Engine.CollectionPage@)">
             <summary>
-            Get collection page instance (or create a new one)
+            Get collection page instance (or create a new one). Returns true if a new collection was created
             </summary>
         </member>
         <member name="M:LiteDB.Engine.CollectionService.Add(System.String,LiteDB.Engine.CollectionPage@)">
@@ -5801,7 +5915,7 @@
         </member>
         <member name="M:LiteDB.Engine.IndexService.Flip">
             <summary>
-            Flip coin - skip list - returns level node (start in 1)
+            Flip coin (skipped list): returns how many levels the node will have (starts in 1, max of INDEX_MAX_LEVELS)
             </summary>
         </member>
         <member name="M:LiteDB.Engine.IndexService.GetNode(LiteDB.Engine.PageAddress)">
@@ -5843,7 +5957,7 @@
             <summary>
             Find first node that index match with value . 
             If index are unique, return unique value - if index are not unique, return first found (can start, middle or end)
-            If not found but sibling = true, returns near node (only non-unique index)
+            If not found but sibling = true and key are not found, returns next value index node (if order = Asc) or prev node (if order = Desc)
             </summary>
         </member>
         <member name="T:LiteDB.Engine.LockService">
@@ -5898,6 +6012,16 @@
         <member name="M:LiteDB.Engine.LockService.ExitExclusive">
             <summary>
             Exit exclusive lock
+            </summary>
+        </member>
+        <member name="T:LiteDB.Engine.RebuildService">
+            <summary>
+            [ThreadSafe]
+            </summary>
+        </member>
+        <member name="M:LiteDB.Engine.RebuildService.ReadFirstBytes">
+            <summary>
+            Read first 16kb (2 PAGES) in bytes
             </summary>
         </member>
         <member name="T:LiteDB.Engine.Snapshot">
@@ -6283,9 +6407,9 @@
             A link pointer to tail node
             </summary>
         </member>
-        <member name="P:LiteDB.Engine.CollectionIndex.MaxLevel">
+        <member name="P:LiteDB.Engine.CollectionIndex.Reserved">
             <summary>
-            Get/Set collection max level
+            Reserved byte (old max level)
             </summary>
         </member>
         <member name="F:LiteDB.Engine.CollectionIndex.FreeIndexPageList">
@@ -6388,9 +6512,9 @@
             Index slot reference in CollectionIndex [1 byte]
             </summary>
         </member>
-        <member name="P:LiteDB.Engine.IndexNode.Level">
+        <member name="P:LiteDB.Engine.IndexNode.Levels">
             <summary>
-            Skip-list level (0-31) - [1 byte]
+            Skip-list levels (array-size) (1-32) - [1 byte]
             </summary>
         </member>
         <member name="P:LiteDB.Engine.IndexNode.Key">
@@ -6570,6 +6694,11 @@
             <summary>
             </summary>
         </member>
+        <member name="F:LiteDB.Engine.RebuildOptions._buildId">
+            <summary>
+            A random BuildID identifier
+            </summary>
+        </member>
         <member name="P:LiteDB.Engine.RebuildOptions.Password">
             <summary>
             Rebuild database with a new password
@@ -6578,6 +6707,22 @@
         <member name="P:LiteDB.Engine.RebuildOptions.Collation">
             <summary>
             Define a new collation when rebuild
+            </summary>
+        </member>
+        <member name="P:LiteDB.Engine.RebuildOptions.IncludeErrorReport">
+            <summary>
+            When set true, if any problem occurs in rebuild, a _rebuild_errors collection
+            will contains all errors found
+            </summary>
+        </member>
+        <member name="P:LiteDB.Engine.RebuildOptions.Errors">
+            <summary>
+            After run rebuild process, get a error report (empty if no error detected)
+            </summary>
+        </member>
+        <member name="M:LiteDB.Engine.RebuildOptions.GetErrorReport">
+            <summary>
+            Get a list of errors during rebuild process
             </summary>
         </member>
         <member name="T:LiteDB.Engine.TransactionPages">
@@ -6720,6 +6865,12 @@
         <member name="M:LiteDB.ByteReader.ReadBsonString">
             <summary>
             Read BSON string add \0x00 at and of string and add this char in length before
+            </summary>
+        </member>
+        <member name="T:LiteDB.AsyncManualResetEvent">
+            <summary>
+            Async implementation of ManualResetEvent
+            https://devblogs.microsoft.com/pfxteam/building-async-coordination-primitives-part-1-asyncmanualresetevent/
             </summary>
         </member>
         <member name="T:LiteDB.BufferSlice">
@@ -6873,6 +7024,11 @@
             Define how many bytes each merge sort container will be created
             </summary>
         </member>
+        <member name="F:LiteDB.Constants.RANDOMIZER_SEED">
+            <summary>
+            Initial seed for Random
+            </summary>
+        </member>
         <member name="M:LiteDB.Constants.LOG(System.String,System.String)">
             <summary>
             Log a message using Debug.WriteLine
@@ -6968,6 +7124,11 @@
             Copy Double bytes direct into buffer
             </summary>
         </member>
+        <member name="M:LiteDB.BufferSliceExtensions.ReadCString(LiteDB.BufferSlice,System.Int32,System.Int32@)">
+            <summary>
+            Read string with \0 on end. Returns full string length (including \0 char)
+            </summary>
+        </member>
         <member name="M:LiteDB.BufferSliceExtensions.ReadIndexKey(LiteDB.BufferSlice,System.Int32)">
             <summary>
             Read any BsonValue. Use 1 byte for data type, 1 byte for length (optional), 0-255 bytes to value. 
@@ -7044,7 +7205,7 @@
             A simple file helper tool with static methods
             </summary>
         </member>
-        <member name="M:LiteDB.FileHelper.GetSufixFile(System.String,System.String,System.Boolean)">
+        <member name="M:LiteDB.FileHelper.GetSuffixFile(System.String,System.String,System.Boolean)">
             <summary>
             Create a temp filename based on original filename - checks if file exists (if exists, append counter number)
             </summary>
@@ -7064,9 +7225,14 @@
             Test if file are used by any process
             </summary>
         </member>
-        <member name="M:LiteDB.FileHelper.TryExec(System.Action,System.TimeSpan)">
+        <member name="M:LiteDB.FileHelper.TryExec(System.Int32,System.Action)">
             <summary>
             Try execute some action while has lock exception
+            </summary>
+        </member>
+        <member name="M:LiteDB.FileHelper.Exec(System.Int32,System.Action)">
+            <summary>
+            Try execute some action while has lock exception. If timeout occurs, throw last exception
             </summary>
         </member>
         <member name="M:LiteDB.FileHelper.ParseFileSize(System.String)">
@@ -7094,9 +7260,29 @@
             The main exception for LiteDB
             </summary>
         </member>
+        <member name="P:LiteDB.LiteException.IsCritical">
+            <summary>
+            Critical error should be stop engine and release data files and all memory allocation
+            </summary>
+        </member>
         <member name="T:LiteDB.MimeTypeConverter">
             <summary>
             Convert filename to mimetype (http://stackoverflow.com/questions/1029740/get-mime-type-from-filename-extension)
+            </summary>
+        </member>
+        <member name="T:LiteDB.Randomizer">
+            <summary>
+            A singleton shared randomizer class
+            </summary>
+        </member>
+        <member name="T:LiteDB.Result`1">
+            <summary>
+            Implement a generic result structure with value and exception. This value can be partial value (like BsonDocument/Array)
+            </summary>
+        </member>
+        <member name="M:LiteDB.Result`1.GetValue">
+            <summary>
+            Get array result or throw exception if there is any error on read result
             </summary>
         </member>
         <member name="T:LiteDB.TokenType">
